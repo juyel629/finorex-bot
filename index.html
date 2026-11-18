@@ -12,61 +12,166 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         body {
-            background-color: #0c1322;
+            background-color: #0b0e14;
             color: #ffffff;
             height: 100vh;
             overflow: hidden;
             display: flex;
-            flex-direction: column;
-            justify-content: space-between;
+            justify-content: center;
+            align-items: center;
         }
-        /* Quotex Background Chart Grid Simulator */
-        .qx-bg {
+        .draggable-overlay {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image: 
-                linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-            background-size: 40px 40px;
-            z-index: 1;
+            top: 20px;
+            left: 20px;
+            width: 320px;
+            background: rgba(18, 24, 38, 0.95);
+            border: 1px solid #2a3b5c;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            cursor: move;
+            user-select: none;
         }
-        /* Top Header */
-        header {
-            position: relative;
-            z-index: 10;
-            background: #131b2e;
-            padding: 10px 15px;
+        .header {
+            background: linear-gradient(135deg, #1f4068, #162447);
+            padding: 12px 15px;
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid #1f2c48;
-        }
-        .account-info {
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            font-weight: bold;
             font-size: 14px;
+            letter-spacing: 0.5px;
         }
-        .demo-badge {
-            background: #2a3b5c;
-            color: #00e676;
-            padding: 3px 8px;
-            border-radius: 4px;
+        .content {
+            padding: 15px;
+        }
+        .signal-box {
+            background: rgba(0, 255, 128, 0.1);
+            border: 1px solid #00ff80;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+        .signal-title {
+            font-size: 11px;
+            color: #a0aec0;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        .signal-value {
+            font-size: 18px;
             font-weight: bold;
+            color: #00ff80;
+        }
+        .metrics {
+            display: flex;
+            justify-content: space-between;
             font-size: 12px;
+            margin-bottom: 15px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 8px 10px;
+            border-radius: 6px;
         }
-        .deposit-btn {
-            background: #00c853;
-            color: white;
-            border: none;
-            padding: 6px 14px;
-            border-radius: 4px;
-            font-weight: bold;
-            cursor: pointer;
+        canvas {
+            width: 100%;
+            height: 100px;
+            background: #07090e;
+            border-radius: 6px;
+            border: 1px solid #1a2639;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="draggable-overlay" id="botOverlay">
+        <div class="header">
+            <span>Finorex AI - 2 Candle</span>
+            <span style="color: #00ff80; font-size: 10px;">● LIVE</span>
+        </div>
+        <div class="content">
+            <div class="signal-box">
+                <div class="signal-title">Analysis Signal</div>
+                <div class="signal-value" id="signalText">CALL (UP) ↗</div>
+            </div>
+            <div class="metrics">
+                <span>Confidence: <strong id="confValue" style="color: #00ff80;">94.2%</strong></span>
+                <span>Strategy: <strong style="color: #64b5f6;">2-Candle Adv</strong></span>
+            </div>
+            <canvas id="miniChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const overlay = document.getElementById('botOverlay');
+        let isDragging = false, startX, startY, initialX = 20, initialY = 20;
+
+        overlay.addEventListener('mousedown', dragStart);
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', dragEnd);
+
+        overlay.addEventListener('touchstart', dragStart, {passive: true});
+        document.addEventListener('touchmove', drag, {passive: false});
+        document.addEventListener('touchend', dragEnd);
+
+        function dragStart(e) {
+            isDragging = true;
+            let clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+            let clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+            startX = clientX - initialX;
+            startY = clientY - initialY;
         }
 
-        /* Floating Widget Container */
-        .floating
+        function drag(e) {
+            if (!isDragging) return;
+            if (e.type === 'touchmove') e.preventDefault();
+            let clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+            let clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+            initialX = clientX - startX;
+            initialY = clientY - startY;
+            overlay.style.left = initialX + 'px';
+            overlay.style.top = initialY + 'px';
+            overlay.style.position = 'fixed';
+        }
+
+        function dragEnd() { isDragging = false; }
+
+        const canvas = document.getElementById('miniChart');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 290;
+        canvas.height = 100;
+
+        let prices = [50, 55, 53, 60, 58, 65, 70, 68, 75, 80];
+
+        function drawChart() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.beginPath();
+            ctx.strokeStyle = '#00ff80';
+            ctx.lineWidth = 2;
+
+            let step = canvas.width / (prices.length - 1);
+            for (let i = 0; i < prices.length; i++) {
+                let x = i * step;
+                let y = canvas.height - (prices[i] / 100) * canvas.height;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+
+        setInterval(() => {
+            prices.shift();
+            let last = prices[prices.length - 1];
+            let next = Math.max(20, Math.min(90, last + (Math.random() * 10 - 5)));
+            prices.push(next);
+            drawChart();
+        }, 1200);
+
+        drawChart();
+    </script>
+</body>
+</html>
