@@ -3,175 +3,434 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finorex AI - 2 Candle Advance</title>
+    <title>Finorex AI - OTC Pro Chart Overlay</title>
     <style>
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         }
         body {
-            background-color: #0b0e14;
-            color: #ffffff;
+            background-color: #131722;
+            color: #d1d4dc;
             height: 100vh;
             overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
         }
-        .draggable-overlay {
+        /* Main Floating Window matching your screenshot */
+        .floating-chart-box {
             position: absolute;
-            top: 20px;
-            left: 20px;
-            width: 320px;
-            background: rgba(18, 24, 38, 0.95);
-            border: 1px solid #2a3b5c;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(10px);
-            z-index: 1000;
-            cursor: move;
+            top: 25px;
+            left: 15px;
+            width: 360px;
+            background-color: #0b0e14;
+            border: 2px solid #e2c07d; /* Gold/cream border from image */
+            border-radius: 6px;
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.85);
+            z-index: 9999;
             user-select: none;
+            overflow: hidden;
         }
-        .header {
-            background: linear-gradient(135deg, #1f4068, #162447);
-            padding: 12px 15px;
-            border-top-left-radius: 12px;
-            border-top-right-radius: 12px;
+        /* Top Title Bar (Draggable) */
+        .window-titlebar {
+            background: #f0f2f5;
+            color: #111;
+            padding: 5px 10px;
+            font-size: 11px;
+            font-weight: 600;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            cursor: move;
+            border-bottom: 1px solid #ccc;
+        }
+        .live-badge {
+            background: #00b865;
+            color: #fff;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 10px;
             font-weight: bold;
-            font-size: 14px;
-            letter-spacing: 0.5px;
         }
-        .content {
-            padding: 15px;
-        }
-        .signal-box {
-            background: rgba(0, 255, 128, 0.1);
-            border: 1px solid #00ff80;
-            border-radius: 8px;
-            padding: 12px;
-            text-align: center;
-            margin-bottom: 12px;
-        }
-        .signal-title {
-            font-size: 11px;
-            color: #a0aec0;
-            text-transform: uppercase;
-            margin-bottom: 4px;
-        }
-        .signal-value {
-            font-size: 18px;
-            font-weight: bold;
-            color: #00ff80;
-        }
-        .metrics {
+        /* Market & Controls Header */
+        .top-controls {
+            background: #131722;
+            padding: 8px 10px;
             display: flex;
             justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #242b3d;
+        }
+        .market-dropdown {
+            background: #1e2433;
+            color: #ffffff;
+            border: 1px solid #36415c;
+            padding: 4px 6px;
+            border-radius: 4px;
             font-size: 12px;
-            margin-bottom: 15px;
-            background: rgba(255, 255, 255, 0.03);
-            padding: 8px 10px;
-            border-radius: 6px;
+            font-weight: bold;
+            outline: none;
+            cursor: pointer;
+            max-width: 145px;
+        }
+        .current-price-display {
+            font-size: 13px;
+            font-weight: bold;
+            color: #ffffff;
+        }
+        .signal-pill {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            background: rgba(0, 230, 118, 0.18);
+            color: #00e676;
+            border: 1px solid #00e676;
+        }
+        .signal-pill.put {
+            background: rgba(255, 82, 82, 0.18);
+            color: #ff5252;
+            border-color: #ff5252;
+        }
+        /* OHLC Bar just like the screenshot */
+        .ohlc-bar {
+            background: #0e121a;
+            padding: 4px 10px;
+            font-size: 10px;
+            color: #8a94a6;
+            border-bottom: 1px solid #1c2333;
+            display: flex;
+            justify-content: space-between;
+            font-family: monospace;
+        }
+        .ohlc-bar span b {
+            color: #d1d4dc;
+        }
+        /* Canvas Wrapper */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 220px;
+            background: #080a0f;
         }
         canvas {
+            display: block;
             width: 100%;
-            height: 100px;
-            background: #07090e;
-            border-radius: 6px;
-            border: 1px solid #1a2639;
+            height: 100%;
+        }
+        /* Bottom Status Strip */
+        .bottom-bar {
+            background: #131722;
+            padding: 5px 10px;
+            font-size: 11px;
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid #242b3d;
+            color: #9aa5b8;
         }
     </style>
 </head>
 <body>
 
-    <div class="draggable-overlay" id="botOverlay">
-        <div class="header">
-            <span>Finorex AI - 2 Candle</span>
-            <span style="color: #00ff80; font-size: 10px;">● LIVE</span>
+    <div class="floating-chart-box" id="chartWindow">
+        <!-- Draggable Title Bar -->
+        <div class="window-titlebar" id="dragHandle">
+            <span>Finorex AI - Forex & OTC Pro Chart</span>
+            <span class="live-badge">● 2-CANDLE LIVE</span>
         </div>
-        <div class="content">
-            <div class="signal-box">
-                <div class="signal-title">Analysis Signal</div>
-                <div class="signal-value" id="signalText">CALL (UP) ↗</div>
-            </div>
-            <div class="metrics">
-                <span>Confidence: <strong id="confValue" style="color: #00ff80;">94.2%</strong></span>
-                <span>Strategy: <strong style="color: #64b5f6;">2-Candle Adv</strong></span>
-            </div>
-            <canvas id="miniChart"></canvas>
+
+        <!-- Market Selector & Live Price -->
+        <div class="top-controls">
+            <select id="marketSelect" class="market-dropdown">
+                <optgroup label="Popular OTC Markets">
+                    <option value="USD/PKR (OTC)" data-base="278.54">USD/PKR (OTC)</option>
+                    <option value="USD/BDT (OTC)" data-base="119.45">USD/BDT (OTC)</option>
+                    <option value="USD/INR (OTC)" data-base="84.32">USD/INR (OTC)</option>
+                    <option value="EUR/USD (OTC)" data-base="1.0845">EUR/USD (OTC)</option>
+                    <option value="GBP/USD (OTC)" data-base="1.2910">GBP/USD (OTC)</option>
+                    <option value="USD/JPY (OTC)" data-base="153.20">USD/JPY (OTC)</option>
+                    <option value="AUD/CAD (OTC)" data-base="0.9125">AUD/CAD (OTC)</option>
+                    <option value="NZD/USD (OTC)" data-base="0.5980">NZD/USD (OTC)</option>
+                    <option value="USD/BRL (OTC)" data-base="5.7840">USD/BRL (OTC)</option>
+                    <option value="USD/TRY (OTC)" data-base="34.25">USD/TRY (OTC)</option>
+                    <option value="USD/MXN (OTC)" data-base="20.15">USD/MXN (OTC)</option>
+                    <option value="EUR/GBP (OTC)" data-base="0.8340">EUR/GBP (OTC)</option>
+                    <option value="GBP/JPY (OTC)" data-base="197.80">GBP/JPY (OTC)</option>
+                    <option value="EUR/JPY (OTC)" data-base="166.15">EUR/JPY (OTC)</option>
+                </optgroup>
+                <optgroup label="Commodities & Crypto (OTC)">
+                    <option value="Gold (OTC)" data-base="2650.40">Gold / XAU (OTC)</option>
+                    <option value="Silver (OTC)" data-base="31.25">Silver (OTC)</option>
+                    <option value="USCrude (OTC)" data-base="70.85">USCrude Oil (OTC)</option>
+                    <option value="Bitcoin (OTC)" data-base="89450.00">Bitcoin (OTC)</option>
+                </optgroup>
+            </select>
+
+            <div class="current-price-display" id="headerPrice">278.54</div>
+            <div class="signal-pill" id="signalBadge">CALL ↗ 94%</div>
+        </div>
+
+        <!-- OHLC Info Bar -->
+        <div class="ohlc-bar" id="ohlcDisplay">
+            <span>O: <b>278.50</b></span>
+            <span>H: <b>278.62</b></span>
+            <span>L: <b>278.48</b></span>
+            <span>C: <b>278.54</b></span>
+        </div>
+
+        <!-- Main Candlestick Canvas -->
+        <div class="chart-container">
+            <canvas id="proCandleCanvas"></canvas>
+        </div>
+
+        <!-- Bottom Info -->
+        <div class="bottom-bar">
+            <span>TF: <strong style="color:#fff;">1M</strong> | Strategy: <strong style="color:#e2c07d;">2-Candle Adv</strong></span>
+            <span>Next Candle: <strong id="timerText" style="color:#00e676;">00:59</strong></span>
         </div>
     </div>
 
     <script>
-        const overlay = document.getElementById('botOverlay');
-        let isDragging = false, startX, startY, initialX = 20, initialY = 20;
+        // Dragging functionality via Title Bar
+        const win = document.getElementById('chartWindow');
+        const handle = document.getElementById('dragHandle');
+        let isDragging = false, offsetX = 0, offsetY = 0;
 
-        overlay.addEventListener('mousedown', dragStart);
-        document.addEventListener('mousemove', drag);
-        document.addEventListener('mouseup', dragEnd);
+        handle.addEventListener('mousedown', startDrag);
+        document.addEventListener('mousemove', onDrag);
+        document.addEventListener('mouseup', stopDrag);
 
-        overlay.addEventListener('touchstart', dragStart, {passive: true});
-        document.addEventListener('touchmove', drag, {passive: false});
-        document.addEventListener('touchend', dragEnd);
+        handle.addEventListener('touchstart', startDrag, {passive: true});
+        document.addEventListener('touchmove', onDrag, {passive: false});
+        document.addEventListener('touchend', stopDrag);
 
-        function dragStart(e) {
+        function startDrag(e) {
             isDragging = true;
             let clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
             let clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
-            startX = clientX - initialX;
-            startY = clientY - initialY;
+            offsetX = clientX - win.offsetLeft;
+            offsetY = clientY - win.offsetTop;
         }
 
-        function drag(e) {
+        function onDrag(e) {
             if (!isDragging) return;
             if (e.type === 'touchmove') e.preventDefault();
             let clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
             let clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
-            initialX = clientX - startX;
-            initialY = clientY - startY;
-            overlay.style.left = initialX + 'px';
-            overlay.style.top = initialY + 'px';
-            overlay.style.position = 'fixed';
+            win.style.left = (clientX - offsetX) + 'px';
+            win.style.top = (clientY - offsetY) + 'px';
         }
 
-        function dragEnd() { isDragging = false; }
+        function stopDrag() { isDragging = false; }
 
-        const canvas = document.getElementById('miniChart');
+        // Candlestick Chart Engine matching screenshot aesthetics
+        const canvas = document.getElementById('proCandleCanvas');
         const ctx = canvas.getContext('2d');
-        canvas.width = 290;
-        canvas.height = 100;
+        canvas.width = 356;
+        canvas.height = 220;
 
-        let prices = [50, 55, 53, 60, 58, 65, 70, 68, 75, 80];
+        let basePrice = 278.54;
+        let decimals = 2;
+        let candles = [];
+        const maxCandles = 24;
 
-        function drawChart() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.beginPath();
-            ctx.strokeStyle = '#00ff80';
-            ctx.lineWidth = 2;
-
-            let step = canvas.width / (prices.length - 1);
-            for (let i = 0; i < prices.length; i++) {
-                let x = i * step;
-                let y = canvas.height - (prices[i] / 100) * canvas.height;
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            }
-            ctx.stroke();
+        function setPrecision(price) {
+            if (price < 5) return 4;
+            if (price < 500) return 2;
+            return 2;
         }
 
-        setInterval(() => {
-            prices.shift();
-            let last = prices[prices.length - 1];
-            let next = Math.max(20, Math.min(90, last + (Math.random() * 10 - 5)));
-            prices.push(next);
-            drawChart();
-        }, 1200);
+        function initMarket(newBase) {
+            basePrice = parseFloat(newBase);
+            decimals = setPrecision(basePrice);
+            candles = [];
+            let stepSize = basePrice * 0.0008;
+            let current = basePrice;
 
-        drawChart();
+            for (let i = 0; i < maxCandles; i++) {
+                let open = current;
+                let change = (Math.random() - 0.48) * stepSize * 2.5;
+                let close = open + change;
+                let high = Math.max(open, close) + Math.random() * stepSize;
+                let low = Math.min(open, close) - Math.random() * stepSize;
+                candles.push({ open, close, high, low });
+                current = close;
+            }
+            updateUI();
+            drawProChart();
+        }
+
+        function updateUI() {
+            let last = candles[candles.length - 1];
+            document.getElementById('headerPrice').innerText = last.close.toFixed(decimals);
+            document.getElementById('ohlcDisplay').innerHTML = `
+                <span>O: <b>${last.open.toFixed(decimals)}</b></span>
+                <span>H: <b>${last.high.toFixed(decimals)}</b></span>
+                <span>L: <b>${last.low.toFixed(decimals)}</b></span>
+                <span>C: <b>${last.close.toFixed(decimals)}</b></span>
+            `;
+
+            // 2-Candle Signal Logic
+            let prev = candles[candles.length - 2];
+            let badge = document.getElementById('signalBadge');
+            let isBullish = last.close >= prev.open;
+            let acc = Math.floor(91 + Math.random() * 7);
+
+            if (isBullish) {
+                badge.classList.remove('put');
+                badge.innerText = `CALL ↗ ${acc}%`;
+            } else {
+                badge.classList.add('put');
+                badge.innerText = `PUT ↙ ${acc}%`;
+            }
+        }
+
+        function drawProChart() {
+            const w = canvas.width;
+            const h = canvas.height;
+            const rightAxisWidth = 54;
+            const chartW = w - rightAxisWidth;
+
+            ctx.clearRect(0, 0, w, h);
+
+            // Calculate Min & Max for scaling
+            let minPrice = Infinity, maxPrice = -Infinity;
+            candles.forEach(c => {
+                if (c.low < minPrice) minPrice = c.low;
+                if (c.high > maxPrice) maxPrice = c.high;
+            });
+            let padding = (maxPrice - minPrice) * 0.15;
+            minPrice -= padding;
+            maxPrice += padding;
+            let range = maxPrice - minPrice || 0.0001;
+
+            function priceToY(p) {
+                return h - ((p - minPrice) / range) * h;
+            }
+
+            // Draw Grid Lines & Right Price Axis Labels
+            ctx.strokeStyle = '#181e2c';
+            ctx.lineWidth = 1;
+            ctx.fillStyle = '#788296';
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'left';
+
+            let gridRows = 5;
+            for (let i = 1; i < gridRows; i++) {
+                let y = (h / gridRows) * i;
+                let priceVal = maxPrice - (range / gridRows) * i;
+
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(chartW, y);
+                ctx.stroke();
+
+                ctx.fillText(priceVal.toFixed(decimals), chartW + 5, y + 3);
+            }
+
+            // Vertical Grid Lines
+            for (let x = 30; x < chartW; x += 45) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, h);
+                ctx.stroke();
+            }
+
+            // Axis Separator Line
+            ctx.strokeStyle = '#262f42';
+            ctx.beginPath();
+            ctx.moveTo(chartW, 0);
+            ctx.lineTo(chartW, h);
+            ctx.stroke();
+
+            // Draw Candlesticks
+            let slotWidth = chartW / maxCandles;
+            let candleWidth = Math.max(5, slotWidth * 0.62);
+
+            candles.forEach((c, idx) => {
+                let x = idx * slotWidth + (slotWidth - candleWidth) / 2;
+                let isGreen = c.close >= c.open;
+                let color = isGreen ? '#00e676' : '#ff3b5c';
+
+                let yOpen = priceToY(c.open);
+                let yClose = priceToY(c.close);
+                let yHigh = priceToY(c.high);
+                let yLow = priceToY(c.low);
+
+                // Wick
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.moveTo(x + candleWidth / 2, yHigh);
+                ctx.lineTo(x + candleWidth / 2, yLow);
+                ctx.stroke();
+
+                // Body
+                ctx.fillStyle = color;
+                let topY = Math.min(yOpen, yClose);
+                let bodyH = Math.max(Math.abs(yClose - yOpen), 2);
+                ctx.fillRect(x, topY, candleWidth, bodyH);
+            });
+
+            // Current Live Price Dashed Line & Green Price Tag on Right Axis (like screenshot)
+            let currentCandle = candles[candles.length - 1];
+            let currentY = priceToY(currentCandle.close);
+            let tagColor = currentCandle.close >= currentCandle.open ? '#00c853' : '#ff3b5c';
+
+            ctx.save();
+            ctx.setLineDash([3, 3]);
+            ctx.strokeStyle = tagColor;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, currentY);
+            ctx.lineTo(chartW, currentY);
+            ctx.stroke();
+            ctx.restore();
+
+            // Price Tag Box on Right Axis
+            ctx.fillStyle = tagColor;
+            ctx.fillRect(chartW + 1, currentY - 8, rightAxisWidth - 2, 16);
+            ctx.fillStyle = '#000000';
+            ctx.font = 'bold 10px monospace';
+            ctx.fillText(currentCandle.close.toFixed(decimals), chartW + 4, currentY + 3);
+        }
+
+        // Market Dropdown Change Event
+        document.getElementById('marketSelect').addEventListener('change', function() {
+            let selectedOption = this.options[this.selectedIndex];
+            let newBase = selectedOption.getAttribute('data-base');
+            initMarket(newBase);
+        });
+
+        // Real-time Tick & 1-Minute Candle Timer
+        let sec = 59;
+        setInterval(() => {
+            sec--;
+            let stepSize = basePrice * 0.0005;
+            let last = candles[candles.length - 1];
+
+            if (sec < 0) {
+                sec = 59;
+                candles.shift();
+                let open = last.close;
+                let close = open + (Math.random() - 0.49) * stepSize * 3;
+                let high = Math.max(open, close) + Math.random() * stepSize;
+                let low = Math.min(open, close) - Math.random() * stepSize;
+                candles.push({ open, close, high, low });
+            } else {
+                // Live tick price fluctuation
+                last.close += (Math.random() - 0.5) * stepSize * 1.2;
+                if (last.close > last.high) last.high = last.close;
+                if (last.close < last.low) last.low = last.close;
+            }
+
+            document.getElementById('timerText').innerText = "00:" + (sec < 10 ? "0" + sec : sec);
+            updateUI();
+            drawProChart();
+        }, 1000);
+
+        // Initialize Default Market (USD/PKR OTC)
+        initMarket(278.54);
     </script>
 </body>
 </html>
